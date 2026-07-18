@@ -1,6 +1,13 @@
 import { useState } from 'react';
-import type { StoryJob } from '../types';
-import { formatStoryAsPlainText } from '../lib/export';
+import type { GherkinTest, NonFunctionalTest, StoryJob } from '../types';
+import {
+  buildStoryHtml,
+  buildStoryPlainText,
+  buildTestHtml,
+  buildTestPlainText,
+  copyRichText,
+  formatGherkinClauses,
+} from '../lib/export';
 
 interface StoryResultCardProps {
   job: StoryJob;
@@ -10,10 +17,9 @@ interface StoryResultCardProps {
 export default function StoryResultCard({ job, index }: StoryResultCardProps) {
   const [copied, setCopied] = useState(false);
 
-  async function handleCopy() {
-    const text = formatStoryAsPlainText(job);
-    if (!text) return;
-    await navigator.clipboard.writeText(text);
+  async function handleCopyStory() {
+    if (!job.result) return;
+    await copyRichText(buildStoryHtml(job), buildStoryPlainText(job));
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   }
@@ -32,8 +38,13 @@ export default function StoryResultCard({ job, index }: StoryResultCardProps) {
         </div>
 
         {job.status === 'done' && (
-          <button type="button" onClick={handleCopy} className="btn-secondary flex-shrink-0 !py-1.5 !text-xs">
-            {copied ? 'Copied ✓' : 'Copy'}
+          <button
+            type="button"
+            onClick={handleCopyStory}
+            className="btn-secondary flex-shrink-0 !py-1.5 !text-xs"
+            title="Copy all test conditions for this story (formatted for Jira)"
+          >
+            {copied ? 'Copied ✓' : 'Copy all'}
           </button>
         )}
       </div>
@@ -63,7 +74,7 @@ export default function StoryResultCard({ job, index }: StoryResultCardProps) {
             )}
 
             {job.result.functional_tests.length > 0 && (
-              <TestGroup title="Functional" tests={job.result.functional_tests.map((t) => ({ ...t, category: undefined }))} />
+              <TestGroup title="Functional" tests={job.result.functional_tests} />
             )}
 
             {job.result.non_functional_tests.length > 0 && (
@@ -78,7 +89,7 @@ export default function StoryResultCard({ job, index }: StoryResultCardProps) {
 
 interface TestGroupProps {
   title: string;
-  tests: { title: string; given: string; when: string; then: string; category?: string }[];
+  tests: GherkinTest[] | NonFunctionalTest[];
   showCategory?: boolean;
 }
 
@@ -90,33 +101,63 @@ function TestGroup({ title, tests, showCategory }: TestGroupProps) {
       </p>
       <ol className="flex flex-col gap-3">
         {tests.map((test, i) => (
-          <li key={i} className="rounded-md border border-line">
-            <div className="flex flex-wrap items-center gap-2 border-b border-line bg-paper px-3 py-1.5">
-              <span className="font-mono text-xs text-muted">#{i + 1}</span>
-              <span className="text-sm font-medium text-ink">{test.title}</span>
-              {showCategory && test.category && (
-                <span className="ml-auto rounded-full bg-brand-light px-2 py-0.5 text-[11px] font-medium text-brand-dark">
-                  {test.category}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-col gap-1 p-2">
-              <div className="gwt-line bg-given-bg text-given">
-                <span className="font-semibold">Given</span>
-                <span className="text-ink/90">{test.given}</span>
-              </div>
-              <div className="gwt-line bg-when-bg text-when">
-                <span className="font-semibold">When</span>
-                <span className="text-ink/90">{test.when}</span>
-              </div>
-              <div className="gwt-line bg-then-bg text-then">
-                <span className="font-semibold">Then</span>
-                <span className="text-ink/90">{test.then}</span>
-              </div>
-            </div>
-          </li>
+          <TestConditionItem key={i} index={i} test={test} showCategory={showCategory} />
         ))}
       </ol>
     </div>
+  );
+}
+
+interface TestConditionItemProps {
+  index: number;
+  test: GherkinTest | NonFunctionalTest;
+  showCategory?: boolean;
+}
+
+function TestConditionItem({ index, test, showCategory }: TestConditionItemProps) {
+  const [copied, setCopied] = useState(false);
+  const { given, when, then } = formatGherkinClauses(test);
+  const category = (test as NonFunctionalTest).category;
+
+  async function handleCopy() {
+    await copyRichText(buildTestHtml(test), buildTestPlainText(test));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <li className="rounded-md border border-line">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line bg-paper px-3 py-1.5">
+        <span className="font-mono text-xs text-muted">#{index + 1}</span>
+        <span className="text-sm font-medium text-ink">{test.title}</span>
+        {showCategory && category && (
+          <span className="rounded-full bg-brand-light px-2 py-0.5 text-[11px] font-medium text-brand-dark">
+            {category}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="btn-secondary ml-auto !py-1 !px-2 !text-[11px]"
+          title="Copy this test condition (formatted for Jira)"
+        >
+          {copied ? 'Copied ✓' : 'Copy'}
+        </button>
+      </div>
+      <div className="flex flex-col gap-1 p-2">
+        <div className="gwt-line bg-given-bg text-given">
+          <span className="font-semibold">Given</span>
+          <span className="text-ink/90">{given}</span>
+        </div>
+        <div className="gwt-line bg-when-bg text-when">
+          <span className="font-semibold">When</span>
+          <span className="text-ink/90">{when}</span>
+        </div>
+        <div className="gwt-line bg-then-bg text-then">
+          <span className="font-semibold">Then</span>
+          <span className="text-ink/90">{then}</span>
+        </div>
+      </div>
+    </li>
   );
 }

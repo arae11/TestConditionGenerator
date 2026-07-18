@@ -107,14 +107,16 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-paper">
-      <header className="border-b border-line bg-white">
+      <header className="border-b-4 border-brand bg-navy">
         <div className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-6 sm:px-6">
           <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-brand">Story → Test</p>
-            <h1 className="mt-1 font-display text-2xl font-bold text-ink sm:text-3xl">
+            <p className="font-mono text-xs uppercase tracking-widest text-brand-light">
+              National Rail · Story → Test
+            </p>
+            <h1 className="mt-1 font-display text-2xl font-bold text-white sm:text-3xl">
               Turn user stories into Gherkin test conditions
             </h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted">
+            <p className="mt-1 max-w-2xl text-sm text-navy-light">
               Upload a CSV or Excel sheet of user stories and generate specific, QA-ready
               Given/When/Then scenarios — functional by default, non-functional on request.
             </p>

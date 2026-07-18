@@ -4,10 +4,14 @@ export default {
   theme: {
     extend: {
       colors: {
-        paper: '#F7F8F4',
-        ink: '#1B1F1D',
-        line: '#DCDFD6',
-        muted: '#6B7268',
+        // Rail-industry palette: National Rail "double arrow" red as the
+        // primary brand colour, paired with a dark rail-blue navy (close to
+        // the historic BS 114 "Rail Blue" specified for British Rail
+        // livery) for headers and dark UI elements.
+        paper: '#F5F6F7',
+        ink: '#131A22',
+        line: '#D8DCE1',
+        muted: '#5B6672',
         given: {
           DEFAULT: '#3B5BA5',
           bg: '#EAEFF9',
@@ -21,11 +25,16 @@ export default {
           bg: '#E8F3EC',
         },
         brand: {
-          DEFAULT: '#2D5F4C',
-          dark: '#1F4737',
-          light: '#DDEAE3',
+          DEFAULT: '#D9262F',
+          dark: '#A81B22',
+          light: '#F7DCDD',
         },
-        warn: '#C0392B',
+        navy: {
+          DEFAULT: '#10243E',
+          dark: '#0A1929',
+          light: '#DDE4EC',
+        },
+        warn: '#B45309',
       },
       fontFamily: {
         display: ['"Space Grotesk"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
@@ -33,7 +42,7 @@ export default {
         mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       boxShadow: {
-        card: '0 1px 2px rgba(27, 31, 29, 0.06), 0 1px 0 rgba(27, 31, 29, 0.04)',
+        card: '0 1px 2px rgba(19, 26, 34, 0.06), 0 1px 0 rgba(19, 26, 34, 0.04)',
       },
     },
   },

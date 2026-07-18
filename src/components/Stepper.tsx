@@ -4,6 +4,7 @@ interface StepperProps {
 
 const STEPS = ['Upload', 'Map column', 'Configure', 'Review'];
 
+// Styled for the dark navy header banner it lives in.
 export default function Stepper({ currentStep }: StepperProps) {
   return (
     <ol className="flex items-center gap-2 sm:gap-4">
@@ -15,18 +16,18 @@ export default function Stepper({ currentStep }: StepperProps) {
             <span
               className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-semibold
                 ${state === 'done' ? 'bg-brand text-white' : ''}
-                ${state === 'active' ? 'bg-brand-light text-brand-dark ring-2 ring-brand' : ''}
-                ${state === 'upcoming' ? 'bg-line text-muted' : ''}`}
+                ${state === 'active' ? 'bg-white text-navy ring-2 ring-brand' : ''}
+                ${state === 'upcoming' ? 'bg-white/10 text-white/50' : ''}`}
             >
               {state === 'done' ? '✓' : stepNum}
             </span>
             <span
               className={`hidden text-sm font-medium sm:inline
-                ${state === 'upcoming' ? 'text-muted' : 'text-ink'}`}
+                ${state === 'upcoming' ? 'text-white/50' : 'text-white'}`}
             >
               {label}
             </span>
-            {idx < STEPS.length - 1 && <span className="h-px w-4 bg-line sm:w-8" aria-hidden="true" />}
+            {idx < STEPS.length - 1 && <span className="h-px w-4 bg-white/20 sm:w-8" aria-hidden="true" />}
           </li>
         );
       })}
