@@ -22,8 +22,15 @@ This keeps the whole app deployable with `netlify deploy` and no separate
 backend infrastructure, while still keeping the API key secret.
 
 **Why Gemini?** Google's Gemini API has a genuine, permanent free tier — no
-credit card, no trial expiry — generous enough for this app (roughly 1,500
-requests/day and 1M tokens/minute on `gemini-2.5-flash` as of mid-2026). The
+credit card, no trial expiry. The function defaults to `gemini-flash-latest`,
+a Google-maintained alias that always points at the current-generation Flash
+model rather than a specific dated model ID. Google periodically retires
+individual model versions (sometimes earlier than their published shutdown
+date — this app originally pinned to `gemini-2.5-flash`, which started
+returning 404s for new API keys ahead of schedule), so using the `-latest`
+alias avoids needing a code change every time that happens. If you want to
+pin an exact model version instead (e.g. for reproducibility), set the
+`LLM_MODEL` environment variable. The
 function also uses Gemini's "controlled generation" feature
 (`responseSchema` + `responseMimeType: "application/json"`), which makes the
 model return JSON conforming to an exact schema rather than just asking it
@@ -159,7 +166,7 @@ also works — the function calls will simply 404 until you use `netlify dev`.
    - `GEMINI_API_KEY` = your free Google Gemini API key (from
      [aistudio.google.com/apikey](https://aistudio.google.com/apikey))
    - (optional) `LLM_MODEL` if you want to pin a specific Gemini model
-     (defaults to `gemini-2.5-flash`)
+     (defaults to `gemini-flash-latest`, Google's auto-updating alias)
 5. Deploy. Netlify will build the frontend and deploy
    `generate-tests.ts` as a serverless function automatically.
 

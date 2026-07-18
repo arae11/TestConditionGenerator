@@ -4,13 +4,17 @@ import type { Handler, HandlerEvent } from '@netlify/functions';
 // Configuration
 //
 // Uses Google's Gemini API, which has a permanent free tier (no credit card,
-// no expiry) generous enough for this app: as of mid-2026, roughly 1,500
-// requests/day and 1M tokens/minute on Gemini 2.5 Flash via Google AI Studio.
-// Get a key at https://aistudio.google.com/apikey and set it as GEMINI_API_KEY
-// in your Netlify environment variables.
+// no expiry). We default to `gemini-flash-latest`, a Google-maintained alias
+// that always points at the current-generation Flash model (currently
+// gemini-3.5-flash). Google occasionally retires specific dated model IDs
+// with little notice (this app originally shipped pinned to
+// `gemini-2.5-flash`, which started 404ing for new API keys ahead of its
+// official deprecation date) — using the `-latest` alias avoids that class of
+// breakage going forward. Get a key at https://aistudio.google.com/apikey and
+// set it as GEMINI_API_KEY in your Netlify environment variables.
 // -----------------------------------------------------------------------------
 
-const GEMINI_MODEL = process.env.LLM_MODEL || 'gemini-2.5-flash';
+const GEMINI_MODEL = process.env.LLM_MODEL || 'gemini-flash-latest';
 const GEMINI_API_URL = (apiKey: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 

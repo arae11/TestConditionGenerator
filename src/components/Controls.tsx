@@ -17,27 +17,47 @@ export default function Controls({
   isGenerating,
   storyCount,
 }: ControlsProps) {
+  // The toggle and slider should be locked while a generation run is in
+  // flight (changing options mid-run would be confusing), independent of
+  // whether the Generate button itself is disabled for other reasons.
+  const controlsLocked = isGenerating;
+
   return (
     <div className="card flex flex-col gap-5 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-8">
-        <label className="flex items-center gap-3">
+        <label
+          className={`flex items-center gap-3 ${controlsLocked ? 'cursor-not-allowed opacity-60' : ''}`}
+        >
           <span className="text-sm font-medium text-ink">Include non-functional tests</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={options.includeNonFunctional}
-            onClick={() => onChange({ ...options, includeNonFunctional: !options.includeNonFunctional })}
-            className={`relative h-6 w-11 flex-shrink-0 rounded-full transition-colors
-              ${options.includeNonFunctional ? 'bg-brand' : 'bg-line'}`}
-          >
-            <span
-              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform
-                ${options.includeNonFunctional ? 'translate-x-5' : 'translate-x-0.5'}`}
+
+          {/* Accessible toggle built on a real checkbox input (visually hidden)
+              so disabled/checked states are handled natively by the browser
+              instead of being reimplemented by hand. The two spans are purely
+              decorative and follow the checkbox's state via the `peer` classes. */}
+          <span className="relative inline-flex h-6 w-11 flex-shrink-0 items-center">
+            <input
+              type="checkbox"
+              className="peer absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+              checked={options.includeNonFunctional}
+              disabled={controlsLocked}
+              onChange={(e) => onChange({ ...options, includeNonFunctional: e.target.checked })}
+              aria-label="Include non-functional tests"
             />
-          </button>
+            <span
+              className="pointer-events-none absolute inset-0 rounded-full bg-line transition-colors
+                peer-checked:bg-brand peer-focus-visible:outline peer-focus-visible:outline-2
+                peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand"
+              aria-hidden="true"
+            />
+            <span
+              className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow
+                transition-transform peer-checked:translate-x-5"
+              aria-hidden="true"
+            />
+          </span>
         </label>
 
-        <div className="flex flex-col gap-1">
+        <div className={`flex flex-col gap-1 ${controlsLocked ? 'opacity-60' : ''}`}>
           <label htmlFor="max-tests-slider" className="text-sm font-medium text-ink">
             Max test conditions per story: <span className="font-mono text-brand">{options.maxTests}</span>
           </label>
@@ -48,8 +68,9 @@ export default function Controls({
             max={30}
             step={1}
             value={options.maxTests}
+            disabled={controlsLocked}
             onChange={(e) => onChange({ ...options, maxTests: Number(e.target.value) })}
-            className="w-56 accent-brand"
+            className="w-56 accent-brand disabled:cursor-not-allowed"
           />
         </div>
       </div>
