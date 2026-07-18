@@ -2,13 +2,18 @@ import type { Handler, HandlerEvent } from '@netlify/functions';
 
 // -----------------------------------------------------------------------------
 // Configuration
+//
+// Uses Google's Gemini API, which has a permanent free tier (no credit card,
+// no expiry) generous enough for this app: as of mid-2026, roughly 1,500
+// requests/day and 1M tokens/minute on Gemini 2.5 Flash via Google AI Studio.
+// Get a key at https://aistudio.google.com/apikey and set it as GEMINI_API_KEY
+// in your Netlify environment variables.
 // -----------------------------------------------------------------------------
 
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_VERSION = '2023-06-01';
-// Override with the LLM_MODEL environment variable if you want to pin a
-// different Claude model without redeploying code.
-const MODEL = process.env.LLM_MODEL || 'claude-sonnet-5';
+const GEMINI_MODEL = process.env.LLM_MODEL || 'gemini-2.5-flash';
+const GEMINI_API_URL = (apiKey: string) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
 const MAX_STORY_LENGTH = 2000;
 
 const NON_FUNCTIONAL_CATEGORIES = [
@@ -45,6 +50,40 @@ interface StoryTestResult {
   non_functional_tests: NonFunctionalTest[];
 }
 
+// Gemini "controlled generation" schema. Passing this alongside
+// responseMimeType: "application/json" makes Gemini's output conform to this
+// shape directly, which is far more reliable than asking nicely in the
+// prompt and hoping for valid JSON back.
+const GHERKIN_TEST_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    title: { type: 'STRING' },
+    given: { type: 'STRING' },
+    when: { type: 'STRING' },
+    then: { type: 'STRING' },
+  },
+  required: ['title', 'given', 'when', 'then'],
+};
+
+const RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    functional_tests: { type: 'ARRAY', items: GHERKIN_TEST_SCHEMA },
+    non_functional_tests: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          ...GHERKIN_TEST_SCHEMA.properties,
+          category: { type: 'STRING', enum: [...NON_FUNCTIONAL_CATEGORIES] },
+        },
+        required: [...GHERKIN_TEST_SCHEMA.required, 'category'],
+      },
+    },
+  },
+  required: ['functional_tests', 'non_functional_tests'],
+};
+
 // -----------------------------------------------------------------------------
 // Handler
 // -----------------------------------------------------------------------------
@@ -54,10 +93,10 @@ export const handler: Handler = async (event: HandlerEvent) => {
     return jsonResponse(405, { error: 'Method not allowed. Use POST.' });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return jsonResponse(500, {
-      error: 'Server misconfiguration: ANTHROPIC_API_KEY is not set in the deployment environment.',
+      error: 'Server misconfiguration: GEMINI_API_KEY is not set in the deployment environment.',
     });
   }
 
@@ -80,18 +119,17 @@ export const handler: Handler = async (event: HandlerEvent) => {
   const prompt = buildPrompt(story, maxTests, includeNonFunctional);
 
   try {
-    const llmResponse = await fetch(ANTHROPIC_API_URL, {
+    const llmResponse = await fetch(GEMINI_API_URL(apiKey), {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': ANTHROPIC_VERSION,
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 4096,
-        temperature: 0.4,
-        messages: [{ role: 'user', content: prompt }],
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.4,
+          maxOutputTokens: 4096,
+          responseMimeType: 'application/json',
+          responseSchema: RESPONSE_SCHEMA,
+        },
       }),
     });
 
@@ -189,45 +227,39 @@ INSTRUCTIONS:
    non_functional_tests combined. Prioritize the most valuable and distinct scenarios if you must
    cut anything to stay within that limit.
 8. Give each test condition a short, descriptive "title" (a few words, e.g. "Missing required
-   field blocks submission").
-
-Respond with ONLY a single JSON object and nothing else — no markdown code fences, no preamble, no
-commentary. Match this exact shape:
-
-{
-  "functional_tests": [
-    { "title": "string", "given": "string", "when": "string", "then": "string" }
-  ],
-  "non_functional_tests": [
-    { "category": "one of the allowed category strings", "title": "string", "given": "string", "when": "string", "then": "string" }
-  ]
-}`;
+   field blocks submission").`;
 }
 
 // -----------------------------------------------------------------------------
 // Response parsing / sanitization
 // -----------------------------------------------------------------------------
 
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string }> };
+  }>;
+}
+
 function extractText(data: unknown): string {
-  const content = (data as { content?: Array<{ type: string; text?: string }> })?.content;
-  if (!Array.isArray(content)) return '';
-  return content
-    .filter((block) => block.type === 'text' && typeof block.text === 'string')
-    .map((block) => block.text)
+  const candidates = (data as GeminiResponse)?.candidates;
+  if (!Array.isArray(candidates) || candidates.length === 0) return '';
+  const parts = candidates[0]?.content?.parts;
+  if (!Array.isArray(parts)) return '';
+  return parts
+    .map((part) => part.text ?? '')
     .join('\n')
     .trim();
 }
 
 function parseModelJson(rawText: string): unknown | null {
-  // Models occasionally wrap JSON in code fences despite instructions not to;
-  // strip those defensively before parsing.
+  // With responseSchema set, Gemini should return raw JSON with no fencing,
+  // but we strip defensively in case of edge cases (e.g. a model swap that
+  // doesn't honor responseMimeType as strictly).
   const cleaned = rawText
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/```\s*$/i, '')
     .trim();
 
-  // If there's leading/trailing prose around the JSON object, try to isolate
-  // the outermost braces as a last resort.
   const candidate = cleaned.startsWith('{') ? cleaned : extractOutermostObject(cleaned);
   if (!candidate) return null;
 

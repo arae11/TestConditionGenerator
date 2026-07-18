@@ -11,21 +11,35 @@ The UI (React + Vite + TypeScript + Tailwind) is a fully static bundle. The
 only server-side code is `netlify/functions/generate-tests.ts`, a single
 Netlify Function that:
 
-- holds the `ANTHROPIC_API_KEY` as a server-side environment variable (it is
+- holds the `GEMINI_API_KEY` as a server-side environment variable (it is
   never sent to, or readable from, the browser)
 - builds the LLM prompt
-- calls the Anthropic Messages API
+- calls the Google Gemini API
 - validates/sanitizes the model's JSON output
 - returns a clean, typed JSON payload to the frontend
 
 This keeps the whole app deployable with `netlify deploy` and no separate
 backend infrastructure, while still keeping the API key secret.
 
+**Why Gemini?** Google's Gemini API has a genuine, permanent free tier — no
+credit card, no trial expiry — generous enough for this app (roughly 1,500
+requests/day and 1M tokens/minute on `gemini-2.5-flash` as of mid-2026). The
+function also uses Gemini's "controlled generation" feature
+(`responseSchema` + `responseMimeType: "application/json"`), which makes the
+model return JSON conforming to an exact schema rather than just asking it
+nicely in the prompt — this is more reliable than schema-by-prompt-only
+approaches. If you'd rather use a different provider (Anthropic, OpenAI,
+Groq, etc.), the only file you need to change is
+`netlify/functions/generate-tests.ts` — swap the fetch call and response
+parsing for that provider's API and update the expected environment variable
+name.
+
 **Why a function instead of calling the LLM straight from the browser?**
 Calling a provider that requires a secret API key directly from client-side
 JavaScript would expose that key to anyone who opens dev tools. Routing the
 call through a Netlify Function keeps the secret server-side, which is the
-approach requested for this project.
+approach requested for this project — this holds regardless of which LLM
+provider sits behind the function.
 
 **Parsing happens entirely client-side.** CSV/XLSX/XLS files are parsed in
 the browser with [SheetJS (`xlsx`)](https://github.com/SheetJS/sheetjs).
@@ -53,14 +67,16 @@ Function, capped at 3 concurrent requests at a time
 - generation respects the max-tests slider (1–30) and the non-functional
   toggle per request
 
-**Structured output over free text.** The prompt instructs the model to
-return only a JSON object matching a fixed shape
-(`{ functional_tests: [...], non_functional_tests: [...] }`). The function
-defensively strips stray code fences, tries to isolate a JSON object if the
-model adds prose around it, and validates every test object's shape before
-returning it — malformed entries are dropped rather than passed through to
-the UI. The max-tests cap is also enforced server-side in case the model
-overshoots the requested limit.
+**Structured output over free text.** Rather than only asking the model in
+the prompt to return JSON, the function uses Gemini's `responseSchema` +
+`responseMimeType: "application/json"` to constrain the output to an exact
+shape (`{ functional_tests: [...], non_functional_tests: [...] }`) at the API
+level. On top of that, the function still defensively strips stray code
+fences, tries to isolate a JSON object if anything unexpected slips through,
+and validates every test object's shape before returning it — malformed
+entries are dropped rather than passed through to the UI. The max-tests cap
+is also enforced server-side in case the model overshoots the requested
+limit.
 
 ## Project structure
 
@@ -115,7 +131,8 @@ npm install
 
 # 2. Configure your API key for local development
 cp .env.example .env
-# then edit .env and set ANTHROPIC_API_KEY=sk-ant-...
+# then edit .env and set GEMINI_API_KEY=... (get a free key at
+# https://aistudio.google.com/apikey — no credit card required)
 
 # 3. Run the app (serves both the Vite frontend and the Netlify Function)
 netlify dev
@@ -139,8 +156,10 @@ also works — the function calls will simply 404 until you use `netlify dev`.
    - Publish directory: `dist`
    - Functions directory: `netlify/functions`
 4. Under **Site configuration → Environment variables**, add:
-   - `ANTHROPIC_API_KEY` = your Anthropic API key
-   - (optional) `LLM_MODEL` if you want to pin a specific model
+   - `GEMINI_API_KEY` = your free Google Gemini API key (from
+     [aistudio.google.com/apikey](https://aistudio.google.com/apikey))
+   - (optional) `LLM_MODEL` if you want to pin a specific Gemini model
+     (defaults to `gemini-2.5-flash`)
 5. Deploy. Netlify will build the frontend and deploy
    `generate-tests.ts` as a serverless function automatically.
 
@@ -149,7 +168,7 @@ also works — the function calls will simply 404 until you use `netlify dev`.
 ```bash
 npm install -g netlify-cli
 netlify init          # link or create a site
-netlify env:set ANTHROPIC_API_KEY sk-ant-...
+netlify env:set GEMINI_API_KEY your-free-gemini-key
 netlify deploy --prod
 ```
 
@@ -161,7 +180,10 @@ upload → column auto-detected → adjust the slider/toggle → generate → ex
 ## Example prompt sent from the backend to the LLM
 
 This is what `netlify/functions/generate-tests.ts` sends for a single story
-(with `maxTests = 8` and non-functional tests enabled):
+(with `maxTests = 8` and non-functional tests enabled). Note that the JSON
+output shape itself is enforced separately via Gemini's `responseSchema`
+(see the function source), so the prompt doesn't need to spell out the exact
+JSON structure — only the content rules:
 
 ```
 You are a senior QA test analyst reviewing an agile user story. Analyze the story carefully
@@ -199,19 +221,13 @@ category to appear): performance, accessibility, security, reliability, usabilit
    cut anything to stay within that limit.
 8. Give each test condition a short, descriptive "title" (a few words, e.g. "Missing required
    field blocks submission").
-
-Respond with ONLY a single JSON object and nothing else — no markdown code fences, no preamble, no
-commentary. Match this exact shape:
-
-{
-  "functional_tests": [
-    { "title": "string", "given": "string", "when": "string", "then": "string" }
-  ],
-  "non_functional_tests": [
-    { "category": "one of the allowed category strings", "title": "string", "given": "string", "when": "string", "then": "string" }
-  ]
-}
 ```
+
+Alongside this prompt, the request also sends a `generationConfig` with
+`responseMimeType: "application/json"` and a `responseSchema` describing the
+exact `functional_tests` / `non_functional_tests` shape, so Gemini's output
+is constrained at the API level rather than relying on the model to follow
+free-text formatting instructions.
 
 ## Notes and limitations
 
