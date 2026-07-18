@@ -227,10 +227,12 @@ INSTRUCTIONS:
 5. Do not produce duplicate test conditions or near-duplicates that only reword the same scenario.
 6. Write "given", "when", and "then" as plain clauses WITHOUT the leading keyword (the keyword is
    added by the renderer) — e.g. "when": "the user submits the form with a missing email address".
-7. Produce at most ${maxTests} test conditions in total across functional_tests and
+7. Make sure the first word after the leading keyword starts in lower case so that when the text
+   is copied the first two words are not capitalised.
+8. Produce at most ${maxTests} test conditions in total across functional_tests and
    non_functional_tests combined. Prioritize the most valuable and distinct scenarios if you must
    cut anything to stay within that limit.
-8. Give each test condition a short, descriptive "title" (a few words, e.g. "Missing required
+9. Give each test condition a short, descriptive "title" (a few words, e.g. "Missing required
    field blocks submission").`;
 }
 
